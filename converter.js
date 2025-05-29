@@ -1,4 +1,97 @@
-#!/usr/bin/env node
+// Función para generar archivos JSON - modificada para arrays
+function generarArchivosJSON(resultados) {
+  const archivos = {};
+
+  // Procesar archivos normales (un archivo por categoría)
+  Object.keys(resultados.archivosNormales).forEach((categoria) => {
+    if (resultados.archivosNormales[categoria].length > 0) {
+      const nombreArchivo = `${categoria}.json`;
+      const contenidoArray =
+        resultados.archivosNormales[categoria][0].contenido;
+      archivos[nombreArchivo] = JSON.stringify(contenidoArray, null, 2);
+    }
+  });
+
+  // Procesar archivos de revisión (un archivo por categoría)
+  Object.keys(resultados.archivosRevision).forEach((categoria) => {
+    if (resultados.archivosRevision[categoria].length > 0) {
+      const nombreArchivo = `${categoria}.json`;
+      const contenidoArray =
+        resultados.archivosRevision[categoria][0].contenido;
+      archivos[nombreArchivo] = JSON.stringify(contenidoArray, null, 2);
+    }
+  });
+
+  // Crear archivo de resumen
+  const resumen = {
+    fechaGeneracion: new Date().toISOString(),
+    directorioOrigen: directorioOrigen,
+    directorioDestino: directorioDestino,
+    totalArchivos: Object.keys(archivos).length,
+    totalObjetos: resultados.estadisticas.totalProcesados,
+    clasificacion: {
+      contratacion_publica:
+        resultados.estadisticas.clasificacion.contratacion_publica,
+      otorgamiento_concesiones:
+        resultados.estadisticas.clasificacion.otorgamiento_concesiones,
+      enajenacion_bienes:
+        resultados.estadisticas.clasificacion.enajenacion_bienes,
+      dictamen_valuatorio:
+        resultados.estadisticas.clasificacion.dictamen_valuatorio,
+      sin_clasificar: resultados.estadisticas.clasificacion.sin_clasificar,
+      revisar_casos_sin_tipoProcedimiento_definido:
+        resultados.estadisticas.clasificacion.revisar_casos,
+    },
+    archivosGenerados: Object.keys(archivos).filter(
+      (nombre) => nombre !== "_resumen_procesamiento.json"
+    ),
+    errores: resultados.estadisticas.errores,
+    advertencias: resultados.estadisticas.advertencias,
+    criteriosClasificacion: {
+      contratacion_publica:
+        "CONTRATACIÓN PÚBLICA, DE TRAMITACIÓN, ATENCIÓN Y RESOLUCIÓN PARA LA ADJUDICACIÓN DE UN CONTRATO",
+      otorgamiento_concesiones:
+        "OTORGAMIENTO DE CONCESIONES, LICENCIAS, PERMISOS, AUTORIZACIONES Y SUS PRÓRROGAS",
+      enajenacion_bienes: "ENAJENACIÓN DE BIENES MUEBLES",
+      dictamen_valuatorio:
+        "EMISIÓN DE DICTAMEN VALUATORIO Y JUSTIPRECIACIÓN DE RENTAS",
+      sin_clasificar:
+        "No coincide con ningún patrón conocido - incluye todas las estructuras vacías",
+      revisar_casos:
+        "Objetos con múltiples tipos de procedimiento - incluye todas las estructuras",
+    },
+    estructuraObjetoGenerado: {
+      descripcion:
+        "Cada archivo contiene un array de objetos con la nueva estructura JSON",
+      campos: [
+        "id",
+        "fecha",
+        "ejercicio",
+        "datosGenerales",
+        "empleoCargoComision",
+        "tipoProcedimiento",
+        "tipoContratacion",
+        "contratacionObra",
+        "otorgamientoConcesiones",
+        "enajenacionBienes",
+        "dictaminacionAvaluos",
+        "observaciones",
+      ],
+      notas: [
+        "Para casos sin clasificar: se incluyen todas las estructuras de procedimiento con campos vacíos",
+        "Para casos con múltiples procedimientos: se incluyen todas las estructuras de procedimiento",
+        "Los niveles de responsabilidad se convierten de objeto a arrays de claves",
+        "Las fechas se formatean de ISO a DD-MM-YYYY",
+        "El género se convierte a HOMBRE/MUJER",
+        "Se infieren entidades federativas, niveles de gobierno y ámbitos públicos",
+      ],
+    },
+  };
+
+  archivos["_resumen_procesamiento.json"] = JSON.stringify(resumen, null, 2);
+
+  return archivos;
+}
 
 // =====================================================
 // SCRIPT DE CONVERSIÓN DE ESTRUCTURA DE DATOS
@@ -302,44 +395,459 @@ function crearEstructuraEspecifica(tipoProcedimiento, objetoOriginal) {
   }
 }
 
-// Función para convertir un objeto individual
+// Función para convertir un objeto individual a la nueva estructura
 function convertirObjeto(objeto) {
-  const objetoBase = {
-    id: objeto.id || "",
-    fechaCaptura: objeto.fechaCaptura || "",
-    ejercicioFiscal: objeto.ejercicioFiscal || "",
-    ramo: objeto.ramo || { clave: "", valor: "" },
-    rfc: objeto.rfc || "",
-    curp: objeto.curp || "",
-    nombres: objeto.nombres || "",
-    primerApellido: objeto.primerApellido || "",
-    segundoApellido: objeto.segundoApellido || "",
-    genero: objeto.genero || { clave: "", valor: "" },
-    institucionDependencia: objeto.institucionDependencia || {
-      nombre: "",
-      siglas: "",
-      clave: "",
+  // Determinar el tipo de procedimiento principal
+  const tipoProcedimientoPrincipal = determinarTipoProcedimientoPrincipal(
+    objeto.tipoProcedimiento
+  );
+
+  // Estructura base del objeto convertido
+  const objetoConvertido = {
+    id: objeto.id || generateUUID(),
+    fecha: formatearFecha(objeto.fechaCaptura),
+    ejercicio: objeto.ejercicioFiscal || "",
+    datosGenerales: {
+      nombre: objeto.nombres || "",
+      primerApellido: objeto.primerApellido || "",
+      segundoApellido: objeto.segundoApellido || "",
+      curp: objeto.curp || "",
+      rfc: objeto.rfc || "",
+      sexo: convertirGenero(objeto.genero),
     },
-    puesto: objeto.puesto || { nombre: "", nivel: "" },
-    nivelesResponsabilidad: convertirTipoAreaANivelesResponsabilidad(
-      objeto.tipoArea,
-      objeto.nivelResponsabilidad
-    ),
-    observaciones: objeto.observaciones || "",
     empleoCargoComision: {
+      entidadFederativa: extraerEntidadFederativa(
+        objeto.institucionDependencia
+      ),
+      nivelOrdenGobierno: determinarNivelOrdenGobierno(objeto.ramo),
+      ambitoPublico: determinarAmbitoPublico(objeto.ramo),
+      nombreEntePublico: objeto.institucionDependencia?.nombre || "",
+      siglasEntePublico: objeto.institucionDependencia?.siglas || "",
+      nivelJerarquico: {
+        clave: determinarNivelJerarquico(objeto.puesto),
+      },
       denominacion: objeto.puesto?.nombre || "",
       areaAdscripcion: objeto.institucionDependencia?.nombre || "",
     },
-    tipoProcedimineto: objeto.tipoProcedimiento?.[0]?.valor || "",
-    superiorInmediato: objeto.superiorInmediato || null,
-    continuaParticipando: true,
+    tipoProcedimiento: tipoProcedimientoPrincipal,
+    observaciones: objeto.observaciones || "",
   };
 
-  const estructuraEspecifica = crearEstructuraEspecifica(
-    objeto.tipoProcedimiento?.[0]?.valor,
-    objeto
+  // Agregar estructura específica según el tipo de procedimiento
+  agregarEstructuraEspecifica(objetoConvertido, objeto);
+
+  return objetoConvertido;
+}
+
+// Función para generar UUID simple
+function generateUUID() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c == "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// Función para formatear fecha
+function formatearFecha(fechaCaptura) {
+  if (!fechaCaptura) return "";
+  try {
+    const fecha = new Date(fechaCaptura);
+    const dia = fecha.getDate().toString().padStart(2, "0");
+    const mes = (fecha.getMonth() + 1).toString().padStart(2, "0");
+    const año = fecha.getFullYear();
+    return `${dia}-${mes}-${año}`;
+  } catch {
+    return "";
+  }
+}
+
+// Función para convertir género
+function convertirGenero(genero) {
+  if (!genero || !genero.clave) return "";
+  return genero.clave.toUpperCase() === "M"
+    ? "HOMBRE"
+    : genero.clave.toUpperCase() === "F"
+    ? "MUJER"
+    : "";
+}
+
+// Función para extraer entidad federativa
+function extraerEntidadFederativa(institucion) {
+  if (!institucion || !institucion.nombre) return "";
+  const nombre = institucion.nombre.toLowerCase();
+
+  // Mapeo básico de entidades federativas
+  const entidades = {
+    "ciudad de mexico": "Ciudad de Mexico",
+    cdmx: "Ciudad de Mexico",
+    "distrito federal": "Ciudad de Mexico",
+    jalisco: "Jalisco",
+    "nuevo leon": "Nuevo Leon",
+    "estado de mexico": "Estado de Mexico",
+    veracruz: "Veracruz",
+    puebla: "Puebla",
+    guanajuato: "Guanajuato",
+    chihuahua: "Chihuahua",
+    sonora: "Sonora",
+    coahuila: "Coahuila",
+    michoacan: "Michoacan",
+    oaxaca: "Oaxaca",
+    tamaulipas: "Tamaulipas",
+    guerrero: "Guerrero",
+    "baja california": "Baja California",
+    sinaloa: "Sinaloa",
+    hidalgo: "Hidalgo",
+    chiapas: "Chiapas",
+  };
+
+  // Buscar coincidencias
+  for (const [clave, valor] of Object.entries(entidades)) {
+    if (nombre.includes(clave)) {
+      return valor;
+    }
+  }
+
+  return "No especificado";
+}
+
+// Función para determinar nivel de orden de gobierno
+function determinarNivelOrdenGobierno(ramo) {
+  if (!ramo || !ramo.valor) return "NO_ESPECIFICADO";
+
+  const valor = ramo.valor.toLowerCase();
+  if (
+    valor.includes("federal") ||
+    valor.includes("poder") ||
+    valor.includes("organismo")
+  ) {
+    return "FEDERAL";
+  } else if (valor.includes("estatal") || valor.includes("estado")) {
+    return "ESTATAL";
+  } else if (valor.includes("municipal") || valor.includes("municipio")) {
+    return "MUNICIPAL";
+  }
+
+  return "FEDERAL"; // Por defecto
+}
+
+// Función para determinar ámbito público
+function determinarAmbitoPublico(ramo) {
+  if (!ramo || !ramo.valor) return "NO_ESPECIFICADO";
+
+  const valor = ramo.valor.toLowerCase();
+  if (
+    valor.includes("ejecutivo") ||
+    valor.includes("secretaria") ||
+    valor.includes("organismo")
+  ) {
+    return "EJECUTIVO";
+  } else if (
+    valor.includes("legislativo") ||
+    valor.includes("congreso") ||
+    valor.includes("camara")
+  ) {
+    return "LEGISLATIVO";
+  } else if (
+    valor.includes("judicial") ||
+    valor.includes("tribunal") ||
+    valor.includes("juzgado")
+  ) {
+    return "JUDICIAL";
+  }
+
+  return "EJECUTIVO"; // Por defecto
+}
+
+// Función para determinar nivel jerárquico
+function determinarNivelJerarquico(puesto) {
+  if (!puesto || !puesto.nombre) return "NO_ESPECIFICADO";
+
+  const nombre = puesto.nombre.toLowerCase();
+
+  if (nombre.includes("director general") || nombre.includes("secretario")) {
+    return "DIRECCION_GENERAL";
+  } else if (
+    nombre.includes("director") ||
+    nombre.includes("coordinador general")
+  ) {
+    return "DIRECCION_HOMOLOGO";
+  } else if (nombre.includes("subdirector") || nombre.includes("coordinador")) {
+    return "SUBDIRECCION_HOMOLOGO";
+  } else if (nombre.includes("jefe") || nombre.includes("supervisor")) {
+    return "JEFATURA_HOMOLOGO";
+  } else if (
+    nombre.includes("regidor") ||
+    nombre.includes("alcalde") ||
+    nombre.includes("presidente municipal")
+  ) {
+    return "DIRECCION_HOMOLOGO";
+  }
+
+  return "OPERATIVO";
+}
+
+// Función para determinar tipo de procedimiento principal
+function determinarTipoProcedimientoPrincipal(tipoProcedimiento) {
+  if (!tipoProcedimiento || tipoProcedimiento.length === 0)
+    return "SIN_CLASIFICAR";
+
+  const primerTipo = tipoProcedimiento[0].valor;
+  const categoria = clasificarTipoProcedimiento(primerTipo);
+
+  switch (categoria) {
+    case "contratacion_publica":
+      return "CONTRATACION_PUBLICA";
+    case "otorgamiento_concesiones":
+      return "OTORGAMIENTO_CONCESIONES";
+    case "enajenacion_bienes":
+      return "ENAJENACION_BIENES";
+    case "dictamen_valuatorio":
+      return "DICTAMEN_VALUATORIO";
+    default:
+      return "SIN_CLASIFICAR";
+  }
+}
+
+// Función para agregar estructura específica según tipo de procedimiento
+function agregarEstructuraEspecifica(objetoConvertido, objetoOriginal) {
+  const categoria = clasificarTipoProcedimiento(
+    objetoOriginal.tipoProcedimiento?.[0]?.valor
   );
-  return { ...objetoBase, ...estructuraEspecifica };
+  const tieneMultiplesProcedimientos =
+    objetoOriginal.tipoProcedimiento &&
+    objetoOriginal.tipoProcedimiento.length > 1;
+
+  switch (categoria) {
+    case "contratacion_publica":
+      objetoConvertido.tipoContratacion = [
+        {
+          clave: "CONTRATACION_ADQUISICION",
+          contratacionAdquisiones:
+            crearEstructuraContratacionAdquisiciones(objetoOriginal),
+        },
+      ];
+      objetoConvertido.contratacionObra =
+        crearEstructuraContratacionObra(objetoOriginal);
+      break;
+
+    case "otorgamiento_concesiones":
+      objetoConvertido.otorgamientoConcesiones =
+        crearEstructuraOtorgamientoConcesiones(objetoOriginal);
+      break;
+
+    case "enajenacion_bienes":
+      objetoConvertido.enajenacionBienes =
+        crearEstructuraEnajenacionBienes(objetoOriginal);
+      break;
+
+    case "dictamen_valuatorio":
+      objetoConvertido.dictaminacionAvaluos =
+        crearEstructuraDictaminacionAvaluos(objetoOriginal);
+      break;
+
+    default:
+      // Para casos sin clasificar, agregar estructura genérica con todos los campos vacíos
+      objetoConvertido.tipoContratacion = [
+        {
+          clave: "CONTRATACION_ADQUISICION",
+          contratacionAdquisiones:
+            crearEstructuraContratacionAdquisiciones(objetoOriginal),
+        },
+      ];
+      objetoConvertido.contratacionObra =
+        crearEstructuraContratacionObra(objetoOriginal);
+      objetoConvertido.otorgamientoConcesiones =
+        crearEstructuraOtorgamientoConcesiones(objetoOriginal);
+      objetoConvertido.enajenacionBienes =
+        crearEstructuraEnajenacionBienes(objetoOriginal);
+      objetoConvertido.dictaminacionAvaluos =
+        crearEstructuraDictaminacionAvaluos(objetoOriginal);
+      break;
+  }
+
+  // Si tiene múltiples procedimientos, agregar todas las estructuras
+  if (tieneMultiplesProcedimientos) {
+    objetoConvertido.tipoContratacion = [
+      {
+        clave: "CONTRATACION_ADQUISICION",
+        contratacionAdquisiones:
+          crearEstructuraContratacionAdquisiciones(objetoOriginal),
+      },
+    ];
+    objetoConvertido.contratacionObra =
+      crearEstructuraContratacionObra(objetoOriginal);
+    objetoConvertido.otorgamientoConcesiones =
+      crearEstructuraOtorgamientoConcesiones(objetoOriginal);
+    objetoConvertido.enajenacionBienes =
+      crearEstructuraEnajenacionBienes(objetoOriginal);
+    objetoConvertido.dictaminacionAvaluos =
+      crearEstructuraDictaminacionAvaluos(objetoOriginal);
+
+    // Agregar metadata para casos de revisión
+    objetoConvertido._metadata = {
+      requiereRevision: true,
+      razon: `Múltiples tipos de procedimiento: ${objetoOriginal.tipoProcedimiento
+        .map((t) => t.valor)
+        .join(", ")}`,
+      fechaProcesamiento: new Date().toISOString(),
+    };
+  }
+}
+
+// Funciones para crear estructuras específicas
+function crearEstructuraContratacionAdquisiciones(objeto) {
+  return {
+    tipoArea: objeto.tipoArea?.[0]?.valor || "NO_ESPECIFICADO",
+    valorTipoArea: objeto.tipoArea?.[0]?.clave || "",
+    nivelesResponsabilidad: {
+      autorizacionDictamen:
+        objeto.nivelResponsabilidad?.map((n) => n.clave) || [],
+      justificacionLicitacion: [],
+      convocatoriaInvitacion: [],
+      evaluacionProposiciones: [],
+      adjudicacionContrato: [],
+      formalizacionContrato: [],
+    },
+    datosGeneralesProcedimientos: [
+      {
+        numeroExpedienteFolio: "",
+        tipoProcedimiento: "NO_ESPECIFICADO",
+        otroTipoProcedimiento: "",
+        materia: "NO_ESPECIFICADO",
+        otroMateria: "",
+        fechaInicioProcedimiento: formatearFecha(objeto.fechaCaptura),
+        fechaConclusionProcedimiento: "",
+      },
+    ],
+    datosBeneficiariosFinales: {
+      razonSocial: "",
+      nombre: "",
+      primerApellido: "",
+      segundoApellido: "",
+      continuaParticipando: false,
+    },
+  };
+}
+
+function crearEstructuraContratacionObra(objeto) {
+  return {
+    tipoArea: objeto.tipoArea?.[0]?.valor || "NO_ESPECIFICADO",
+    valorContratacionObra: objeto.tipoArea?.[0]?.clave || "",
+    nivelesResponsabilidad: {
+      autorizacionDictamen:
+        objeto.nivelResponsabilidad?.map((n) => n.clave) || [],
+      justificacionLicictacion: [],
+      convocatoriaInvitacion: [],
+      evaluacionProposiciones: [],
+      adjudicacionContrato: [],
+      formalizacionContrato: [],
+    },
+    datosGeneralesProcedimientos: {
+      numeroExpedienteFolio: "",
+      tipoProcedimiento: "NO_ESPECIFICADO",
+      otroTipoProcedimiento: "",
+      materia: "NO_ESPECIFICADO",
+      otroMateria: "",
+      fechaInicioProcedimiento: formatearFecha(objeto.fechaCaptura),
+      fechaConclusionProcedimiento: "",
+    },
+    datosBeneficiariosFinales: {
+      razonSocial: "",
+      nombre: "",
+      primerApellido: "",
+      segundoApellido: "",
+      continuaParticipando: false,
+    },
+  };
+}
+
+function crearEstructuraOtorgamientoConcesiones(objeto) {
+  return {
+    tipoActo: "NO_ESPECIFICADO",
+    nivelesResponsabilidad: {
+      convocatoriaLicitacion:
+        objeto.nivelResponsabilidad?.map((n) => n.clave) || [],
+      dictamenesOpiniones: [],
+      visitasVerificacion: [],
+      evaluacionCumplimiento: [],
+      determinacionOtorgamiento: [],
+    },
+    datosGeneralesProcedimientos: {
+      numeroExpedienteFolio: "",
+      denominacion: objeto.puesto?.nombre || "",
+      objeto: "",
+      fundamento: "",
+      nombrePersonaSolicitaOtorga: objeto.nombres || "",
+      primerApellidoSolicitaOtorga: objeto.primerApellido || "",
+      segundoApellidoSolicitaOtorga: objeto.segundoApellido || "",
+      denominacionPersonaMoral: objeto.institucionDependencia?.nombre || "",
+      sectorActo: "",
+      fechaInicioVigencia: formatearFecha(objeto.fechaCaptura),
+      fechaConclusionVigencia: "",
+      monto: "",
+      urlInformacionActo: "",
+    },
+    datosBeneficiariosFinales: {
+      razonSocial: objeto.institucionDependencia?.nombre || "",
+      nombre: objeto.nombres || "",
+      primerApellido: objeto.primerApellido || "",
+      segundoApellido: objeto.segundoApellido || "",
+      continuaParticipando: false,
+    },
+  };
+}
+
+function crearEstructuraEnajenacionBienes(objeto) {
+  return {
+    nivelesResponsabilidad: {
+      autorizacionesDictamenes:
+        objeto.nivelResponsabilidad?.map((n) => n.clave) || [],
+      analisisAutorizacion: [],
+      modificacionBases: [],
+      presentacionOfertas: [],
+      evaluacionOfertas: [],
+      adjudicacionBienes: [],
+      formalizacionContrato: [],
+    },
+    datosGeneralesProcedimientos: {
+      numeroExpedienteFolio: "",
+      descripcion: objeto.puesto?.nombre || "",
+      fechaInicioProcedimiento: formatearFecha(objeto.fechaCaptura),
+      fechaConclusionProcedimiento: "",
+    },
+    datosBeneficiariosFinales: {
+      razonSocial: "",
+      nombre: "",
+      primerApellido: "",
+      segundoApellido: "",
+      continuaParticipando: false,
+    },
+  };
+}
+
+function crearEstructuraDictaminacionAvaluos(objeto) {
+  return {
+    nivelesResponsabilidad: {
+      propuestasAsignaciones:
+        objeto.nivelResponsabilidad?.map((n) => n.clave) || [],
+      asignacionAvaluos: [],
+      emisionDictamenes: [],
+    },
+    datosGeneralesProcedimientos: {
+      numeroExpedienteFolio: "",
+      descripcion: objeto.puesto?.nombre || "",
+      fechaInicioProcedimiento: formatearFecha(objeto.fechaCaptura),
+      fechaConclusionProcedimiento: "",
+    },
+    datosBeneficiariosFinales: {
+      razonSocial: "",
+      nombre: "",
+      primerApellido: "",
+      segundoApellido: "",
+      continuaParticipando: false,
+    },
+  };
 }
 
 // Función para clasificar tipo de procedimiento
@@ -400,7 +908,7 @@ function clasificarTipoProcedimiento(tipoProcedimientoValor) {
   return "sin_clasificar";
 }
 
-// Función principal de conversión
+// Función principal de conversión - modificada para generar arrays
 function convertirEstructura(datosOriginales) {
   const resultados = {
     archivosNormales: {},
@@ -420,6 +928,16 @@ function convertirEstructura(datosOriginales) {
     },
   };
 
+  // Inicializar arrays para cada categoría
+  const categorias = {
+    contratacion_publica: [],
+    otorgamiento_concesiones: [],
+    enajenacion_bienes: [],
+    dictamen_valuatorio: [],
+    sin_clasificar: [],
+    revisar_casos_sin_tipoProcedimiento_definido: [],
+  };
+
   datosOriginales.forEach((objeto, index) => {
     try {
       // Validaciones básicas
@@ -434,61 +952,43 @@ function convertirEstructura(datosOriginales) {
         objeto.tipoProcedimiento && objeto.tipoProcedimiento.length > 1;
       const objetoConvertido = convertirObjeto(objeto);
 
-      const nombreArchivo = `${objeto.id || index}_${objeto.nombres.replace(
-        /\s+/g,
-        "_"
-      )}_${objeto.primerApellido}.json`;
-
       if (tieneMultiplesProcedimientos) {
-        // Casos con múltiples procedimientos van a directorio especial
-        const rutaRevision = "revisar_casos_sin_tipoProcedimiento_definido";
-        if (!resultados.archivosRevision[rutaRevision]) {
-          resultados.archivosRevision[rutaRevision] = [];
-        }
-
-        // Agregar metadata de revisión
-        objetoConvertido._metadata = {
-          requiereRevision: true,
-          razon: `Múltiples tipos de procedimiento: ${objeto.tipoProcedimiento
-            .map((t) => t.valor)
-            .join(", ")}`,
-          fechaProcesamiento: new Date().toISOString(),
-          procedimientosDetectados: objeto.tipoProcedimiento.map(
-            (t) => t.valor
-          ),
-        };
-
-        resultados.archivosRevision[rutaRevision].push({
-          archivo: nombreArchivo,
-          contenido: objetoConvertido,
-        });
-
+        // Casos con múltiples procedimientos
+        categorias["revisar_casos_sin_tipoProcedimiento_definido"].push(
+          objetoConvertido
+        );
         resultados.estadisticas.clasificacion.revisar_casos++;
       } else {
         // Clasificar según el tipo de procedimiento
         const tipoProcedimiento = objeto.tipoProcedimiento?.[0]?.valor || "";
         const categoria = clasificarTipoProcedimiento(tipoProcedimiento);
 
-        if (!resultados.archivosNormales[categoria]) {
-          resultados.archivosNormales[categoria] = [];
-        }
-
-        // Agregar información de clasificación al objeto
-        objetoConvertido._clasificacion = {
-          categoria: categoria,
-          tipoProcedimientoOriginal: tipoProcedimiento,
-          fechaClasificacion: new Date().toISOString(),
-        };
-
-        resultados.archivosNormales[categoria].push({
-          archivo: nombreArchivo,
-          contenido: objetoConvertido,
-        });
-
+        categorias[categoria].push(objetoConvertido);
         resultados.estadisticas.clasificacion[categoria]++;
       }
     } catch (error) {
       resultados.estadisticas.errores.push(`Objeto ${index}: ${error.message}`);
+    }
+  });
+
+  // Generar archivos por categoría (un archivo por categoría con array de objetos)
+  Object.keys(categorias).forEach((categoria) => {
+    if (categorias[categoria].length > 0) {
+      if (categoria === "revisar_casos_sin_tipoProcedimiento_definido") {
+        resultados.archivosRevision[categoria] = [
+          {
+            archivo: `${categoria}.json`,
+            contenido: categorias[categoria],
+          },
+        ];
+      } else {
+        resultados.archivosNormales[categoria] = [
+          {
+            archivo: `${categoria}.json`,
+            contenido: categorias[categoria],
+          },
+        ];
+      }
     }
   });
 
@@ -640,30 +1140,30 @@ async function main() {
     const clasificacion = resultados.estadisticas.clasificacion;
 
     console.log(
-      `   📁 contratacion_publica: ${clasificacion.contratacion_publica} archivos`
+      `   📁 contratacion_publica.json: ${clasificacion.contratacion_publica} objetos`
     );
     console.log(
-      `   📁 otorgamiento_concesiones: ${clasificacion.otorgamiento_concesiones} archivos`
+      `   📁 otorgamiento_concesiones.json: ${clasificacion.otorgamiento_concesiones} objetos`
     );
     console.log(
-      `   📁 enajenacion_bienes: ${clasificacion.enajenacion_bienes} archivos`
+      `   📁 enajenacion_bienes.json: ${clasificacion.enajenacion_bienes} objetos`
     );
     console.log(
-      `   📁 dictamen_valuatorio: ${clasificacion.dictamen_valuatorio} archivos`
+      `   📁 dictamen_valuatorio.json: ${clasificacion.dictamen_valuatorio} objetos`
     );
     console.log(
-      `   📁 sin_clasificar: ${clasificacion.sin_clasificar} archivos`
+      `   📁 sin_clasificar.json: ${clasificacion.sin_clasificar} objetos`
     );
     console.log(
-      `   ⚠️  revisar_casos_sin_tipoProcedimiento_definido: ${clasificacion.revisar_casos} archivos`
+      `   ⚠️  revisar_casos_sin_tipoProcedimiento_definido.json: ${clasificacion.revisar_casos} objetos`
     );
 
-    // Mostrar estructura de directorios creada
-    console.log("\n📁 ESTRUCTURA DE DIRECTORIOS CREADA:");
+    // Mostrar archivos generados
+    console.log("\n📁 ARCHIVOS GENERADOS:");
     Object.keys(resultados.archivosNormales).forEach((categoria) => {
       if (resultados.archivosNormales[categoria].length > 0) {
         console.log(
-          `   📂 ${categoria}/ (${resultados.archivosNormales[categoria].length} archivos)`
+          `   📄 ${categoria}.json (${resultados.estadisticas.clasificacion[categoria]} objetos en array)`
         );
       }
     });
@@ -671,10 +1171,12 @@ async function main() {
     Object.keys(resultados.archivosRevision).forEach((categoria) => {
       if (resultados.archivosRevision[categoria].length > 0) {
         console.log(
-          `   📂 ${categoria}/ (${resultados.archivosRevision[categoria].length} archivos - REQUIEREN REVISIÓN)`
+          `   📄 ${categoria}.json (${resultados.estadisticas.clasificacion.revisar_casos} objetos - REQUIEREN REVISIÓN)`
         );
       }
     });
+
+    console.log(`   📄 _resumen_procesamiento.json (estadísticas y metadatos)`);
 
     if (resultados.estadisticas.errores.length > 0) {
       console.log(
@@ -706,23 +1208,28 @@ async function main() {
       "📋 Revisa el archivo _resumen_procesamiento.json para detalles completos"
     );
 
-    // Mostrar guía de clasificación utilizada
-    console.log("\n📖 CRITERIOS DE CLASIFICACIÓN UTILIZADOS:");
+    // Mostrar información sobre la nueva estructura
+    console.log("\n📖 ESTRUCTURA DE DATOS GENERADA:");
     console.log(
-      "   • contratacion_publica: Contratación pública, licitación, adjudicación, contratos"
+      "   • Cada archivo .json contiene un ARRAY de objetos con la nueva estructura"
     );
+    console.log("   • Formato de fechas: DD-MM-YYYY");
+    console.log("   • Género convertido a: HOMBRE/MUJER");
+    console.log("   • Niveles de responsabilidad como arrays de claves");
     console.log(
-      "   • otorgamiento_concesiones: Concesiones, licencias, permisos, autorizaciones"
+      "   • Campos inferidos: entidad federativa, nivel de gobierno, ámbito público"
     );
+
+    console.log("\n📖 TIPOS DE ESTRUCTURA SEGÚN CLASIFICACIÓN:");
     console.log(
-      "   • enajenacion_bienes: Enajenación, bienes muebles, venta, disposición"
+      "   • contratacion_publica: tipoContratacion + contratacionObra"
     );
+    console.log("   • otorgamiento_concesiones: otorgamientoConcesiones");
+    console.log("   • enajenacion_bienes: enajenacionBienes");
+    console.log("   • dictamen_valuatorio: dictaminacionAvaluos");
+    console.log("   • sin_clasificar: TODAS las estructuras con campos vacíos");
     console.log(
-      "   • dictamen_valuatorio: Dictamen valuatorio, justipreciación, avalúos, rentas"
-    );
-    console.log("   • sin_clasificar: No coincide con ningún patrón conocido");
-    console.log(
-      "   • revisar_casos: Múltiples tipos de procedimiento detectados"
+      "   • revisar_casos: TODAS las estructuras (múltiples procedimientos)"
     );
   } catch (error) {
     console.error("❌ Error fatal:", error.message);
@@ -741,46 +1248,80 @@ main();
 INSTRUCCIONES DE USO:
 
 1. GUARDAR EL SCRIPT:
-   Guarda este archivo como 'converter.js'
+ Guarda este archivo como 'converter.js'
 
 2. HACER EJECUTABLE (opcional):
-   chmod +x converter.js
+ chmod +x converter.js
 
 3. EJECUTAR:
-   node converter.js <directorio_origen> <directorio_destino>
+ node converter.js <directorio_origen> <directorio_destino>
 
 EJEMPLOS:
-   node converter.js ./datos_originales ./datos_convertidos
-   node converter.js /ruta/completa/origen /ruta/completa/destino
+ node converter.js ./datos_originales ./datos_convertidos
+ node converter.js /ruta/completa/origen /ruta/completa/destino
 
 COMPORTAMIENTO:
-   - Lee todos los archivos .json del directorio origen (recursivamente)
-   - Limpia completamente el directorio destino antes de escribir
-   - Crea la estructura de directorios automáticamente
-   - Genera un archivo de resumen con estadísticas
+ - Lee todos los archivos .json del directorio origen (recursivamente)
+ - Limpia completamente el directorio destino antes de escribir
+ - Crea la estructura de directorios automáticamente
+ - Genera un archivo de resumen con estadísticas
 
 ESTRUCTURA DE SALIDA:
-   destino/
-   ├── contratacion_publica/
-   │   ├── 1_RODOLFO_BENJAMIN_MARTINEZ.json
-   │   └── 3_GLORIA_IVETTE_ROSAS.json
-   ├── otorgamiento_concesiones/
-   │   └── 4_MARIA_ELENA_GARCIA.json
-   ├── enajenacion_bienes/
-   │   └── 5_PEDRO_LUIS_HERNANDEZ.json
-   ├── dictamen_valuatorio/
-   │   └── 6_ANA_SOFIA_LOPEZ.json
-   ├── sin_clasificar/
-   │   └── 7_CARLOS_MIGUEL_TORRES.json
-   ├── revisar_casos_sin_tipoProcedimiento_definido/
-   │   └── 2_ALEJANDRO_JAVIER_ROMERO.json
-   └── _resumen_procesamiento.json
+ destino/
+ ├── contratacion_publica.json (array de objetos)
+ ├── otorgamiento_concesiones.json (array de objetos)
+ ├── enajenacion_bienes.json (array de objetos)
+ ├── dictamen_valuatorio.json (array de objetos)
+ ├── sin_clasificar.json (array de objetos)
+ ├── revisar_casos_sin_tipoProcedimiento_definido.json (array de objetos)
+ └── _resumen_procesamiento.json
+
+ESTRUCTURA JSON DE CADA OBJETO:
+{
+"id": "550e8400-e29b-41d4-a716-446655440000",
+"fecha": "21-11-2023",
+"ejercicio": "2023",
+"datosGenerales": {
+  "nombre": "ISRAEL",
+  "primerApellido": "JUAREZ",
+  "segundoApellido": "MENDEZ",
+  "curp": "",
+  "rfc": "",
+  "sexo": "HOMBRE"
+},
+"empleoCargoComision": {
+  "entidadFederativa": "No especificado",
+  "nivelOrdenGobierno": "MUNICIPAL",
+  "ambitoPublico": "EJECUTIVO",
+  "nombreEntePublico": "Municipio de Sabanilla",
+  "siglasEntePublico": "",
+  "nivelJerarquico": {
+    "clave": "DIRECCION_HOMOLOGO"
+  },
+  "denominacion": "REGIDOR",
+  "areaAdscripcion": "Municipio de Sabanilla"
+},
+"tipoProcedimiento": "SIN_CLASIFICAR",
+"tipoContratacion": [...],
+"contratacionObra": {...},
+"otorgamientoConcesiones": {...},
+"enajenacionBienes": {...},
+"dictaminacionAvaluos": {...},
+"observaciones": ""
+}
 
 CRITERIOS DE CLASIFICACIÓN:
-   • contratacion_publica: CONTRATACIÓN PÚBLICA, TRAMITACIÓN, ADJUDICACIÓN, CONTRATOS
-   • otorgamiento_concesiones: CONCESIONES, LICENCIAS, PERMISOS, AUTORIZACIONES
-   • enajenacion_bienes: ENAJENACIÓN DE BIENES MUEBLES, VENTA, DISPOSICIÓN
-   • dictamen_valuatorio: DICTAMEN VALUATORIO, JUSTIPRECIACIÓN, AVALÚOS, RENTAS
-   • sin_clasificar: No coincide con ningún patrón conocido
-   • revisar_casos: Múltiples tipos de procedimiento detectados
+ • contratacion_publica: Solo incluye tipoContratacion + contratacionObra
+ • otorgamiento_concesiones: Solo incluye otorgamientoConcesiones
+ • enajenacion_bienes: Solo incluye enajenacionBienes
+ • dictamen_valuatorio: Solo incluye dictaminacionAvaluos
+ • sin_clasificar: Incluye TODAS las estructuras con campos vacíos
+ • revisar_casos: Incluye TODAS las estructuras (múltiples procedimientos)
+
+TRANSFORMACIONES APLICADAS:
+ • Fechas: ISO 8601 → DD-MM-YYYY
+ • Género: M/F → HOMBRE/MUJER
+ • Niveles responsabilidad: objetos → arrays de claves
+ • Inferencia automática de entidades federativas y niveles de gobierno
+ • Generación de UUIDs para objetos sin ID
 */
