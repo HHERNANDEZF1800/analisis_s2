@@ -172,3 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+PDN_S2
+PDN_S2.zip
+convertidos_PDN_S2
+analisis_s2
