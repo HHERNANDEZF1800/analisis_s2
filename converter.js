@@ -582,9 +582,11 @@ function determinarNivelJerarquico(puesto) {
     nombre.includes("presidente municipal")
   ) {
     return "DIRECCION_HOMOLOGO";
+  } else if (nombre.includes("operativo")) {
+    return "OPERATIVO_HOMOLOGO";
   }
 
-  return "OPERATIVO";
+  return "OTRO";
 }
 
 // Función para determinar tipo de procedimiento principal
