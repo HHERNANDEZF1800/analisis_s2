@@ -298,12 +298,12 @@ function crearEstructuraEspecifica(tipoProcedimiento, objetoOriginal) {
         otorgamientoConcesiones: {
           tipoActo: "CONCESIÓN",
           nivelesResponsabilidad: {
-            convocatoriaLicitacion:
-              objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
+            convocatoriaLicitacion: "",
             dictamenesOpiniones: "",
             visitasVerificacion: "",
             evaluacionCumplimiento: "",
             determinacionOtorgamiento: "",
+            otro: objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
           },
           datosGeneralesProcedimientos: {
             numeroExpedienteFolio: "",
@@ -559,7 +559,7 @@ function determinarAmbitoPublico(ramo) {
   return "EJECUTIVO"; // Por defecto
 }
 
-// Función para determinar nivel jerárquico
+// Función para determinar nivel jerárquico - corregida según especificación
 function determinarNivelJerarquico(puesto) {
   if (!puesto || !puesto.nombre) return "NO_ESPECIFICADO";
 
@@ -567,6 +567,16 @@ function determinarNivelJerarquico(puesto) {
 
   if (nombre.includes("director general") || nombre.includes("secretario")) {
     return "DIRECCION_GENERAL";
+  } else if (
+    nombre.includes("subsecretario") ||
+    nombre.includes("subsecretaria")
+  ) {
+    return "SUBSECRETARIA_HOMOLOGO";
+  } else if (
+    nombre.includes("director general adjunto") ||
+    nombre.includes("dg")
+  ) {
+    return "DG_HOMOLOGO";
   } else if (
     nombre.includes("director") ||
     nombre.includes("coordinador general")
@@ -582,7 +592,19 @@ function determinarNivelJerarquico(puesto) {
     nombre.includes("presidente municipal")
   ) {
     return "DIRECCION_HOMOLOGO";
-  } else if (nombre.includes("operativo")) {
+  } else if (
+    nombre.includes("operativo") ||
+    nombre.includes("analista") ||
+    nombre.includes("técnico") ||
+    nombre.includes("especialista") ||
+    nombre.includes("auxiliar") ||
+    nombre.includes("asistente") ||
+    nombre.includes("profesional") ||
+    nombre.includes("enlace") ||
+    nombre.includes("ejecutivo") ||
+    nombre.includes("oficial") ||
+    nombre.includes("coordinadora")
+  ) {
     return "OPERATIVO_HOMOLOGO";
   }
 
@@ -625,17 +647,17 @@ function agregarEstructuraEspecifica(objetoConvertido, objetoOriginal) {
       objetoConvertido.tipoContratacion = [
         {
           clave: "CONTRATACION_ADQUISICION",
-          contratacionAdquisiones:
-            crearEstructuraContratacionAdquisiciones(objetoOriginal),
         },
       ];
-      objetoConvertido.contratacionObra =
-        crearEstructuraContratacionObra(objetoOriginal);
+      objetoConvertido.contratacionAdquisiones =
+        crearEstructuraContratacionAdquisiciones(objetoOriginal);
       break;
 
     case "otorgamiento_concesiones":
       objetoConvertido.otorgamientoConcesiones =
         crearEstructuraOtorgamientoConcesiones(objetoOriginal);
+      objetoConvertido.datosBeneficiariosFinales =
+        crearDatosBeneficiarios(objetoOriginal);
       break;
 
     case "enajenacion_bienes":
@@ -649,18 +671,18 @@ function agregarEstructuraEspecifica(objetoConvertido, objetoOriginal) {
       break;
 
     default:
-      // Para casos sin clasificar, agregar estructura genérica con todos los campos vacíos
+      // Para casos sin clasificar, agregar todas las estructuras con campos vacíos
       objetoConvertido.tipoContratacion = [
         {
           clave: "CONTRATACION_ADQUISICION",
-          contratacionAdquisiones:
-            crearEstructuraContratacionAdquisiciones(objetoOriginal),
         },
       ];
-      objetoConvertido.contratacionObra =
-        crearEstructuraContratacionObra(objetoOriginal);
+      objetoConvertido.contratacionAdquisiones =
+        crearEstructuraContratacionAdquisiciones(objetoOriginal);
       objetoConvertido.otorgamientoConcesiones =
         crearEstructuraOtorgamientoConcesiones(objetoOriginal);
+      objetoConvertido.datosBeneficiariosFinales =
+        crearDatosBeneficiarios(objetoOriginal);
       objetoConvertido.enajenacionBienes =
         crearEstructuraEnajenacionBienes(objetoOriginal);
       objetoConvertido.dictaminacionAvaluos =
@@ -668,23 +690,27 @@ function agregarEstructuraEspecifica(objetoConvertido, objetoOriginal) {
       break;
   }
 
+  // Agregar continuaParticipando a nivel raíz
+  objetoConvertido.continuaParticipando = true;
+
   // Si tiene múltiples procedimientos, agregar todas las estructuras
   if (tieneMultiplesProcedimientos) {
     objetoConvertido.tipoContratacion = [
       {
         clave: "CONTRATACION_ADQUISICION",
-        contratacionAdquisiones:
-          crearEstructuraContratacionAdquisiciones(objetoOriginal),
       },
     ];
-    objetoConvertido.contratacionObra =
-      crearEstructuraContratacionObra(objetoOriginal);
+    objetoConvertido.contratacionAdquisiones =
+      crearEstructuraContratacionAdquisiciones(objetoOriginal);
     objetoConvertido.otorgamientoConcesiones =
       crearEstructuraOtorgamientoConcesiones(objetoOriginal);
+    objetoConvertido.datosBeneficiariosFinales =
+      crearDatosBeneficiarios(objetoOriginal);
     objetoConvertido.enajenacionBienes =
       crearEstructuraEnajenacionBienes(objetoOriginal);
     objetoConvertido.dictaminacionAvaluos =
       crearEstructuraDictaminacionAvaluos(objetoOriginal);
+    objetoConvertido.continuaParticipando = true;
 
     // Agregar metadata para casos de revisión
     objetoConvertido._metadata = {
@@ -697,105 +723,63 @@ function agregarEstructuraEspecifica(objetoConvertido, objetoOriginal) {
   }
 }
 
-// Funciones para crear estructuras específicas
+// Funciones para crear estructuras específicas según los ejemplos
 function crearEstructuraContratacionAdquisiciones(objeto) {
   return {
-    tipoArea: objeto.tipoArea?.[0]?.valor || "NO_ESPECIFICADO",
-    valorTipoArea: objeto.tipoArea?.[0]?.clave || "",
+    tipoArea: objeto.tipoArea?.[0]?.valor || "AREA_CONTRATANTE",
     nivelesResponsabilidad: {
-      autorizacionDictamen: [],
-      justificacionLicitacion: [],
-      convocatoriaInvitacion: [],
-      evaluacionProposiciones: [],
-      adjudicacionContrato: [],
-      formalizacionContrato: [],
-      otro: objeto.nivelResponsabilidad?.map((n) => n.clave) || [],
+      autorizacionDictamen: [""],
+      justificacionLicitacion: [""],
+      convocatoriaInvitacion: [""],
+      evaluacionProposiciones: [""],
+      adjudicacionContrato: [""],
+      formalizacionContrato: [""],
+      otro: objeto.nivelResponsabilidad?.map((n) => n.valor) || [""],
     },
     datosGeneralesProcedimientos: [
       {
         numeroExpedienteFolio: "",
-        tipoProcedimiento: "NO_ESPECIFICADO",
-        otroTipoProcedimiento: "",
-        materia: "NO_ESPECIFICADO",
-        otroMateria: "",
+        tipoProcedimiento: "LICITACION_NACIONAL",
+        materia: "ADQUICISION",
         fechaInicioProcedimiento: formatearFecha(objeto.fechaCaptura),
         fechaConclusionProcedimiento: "",
       },
     ],
     datosBeneficiariosFinales: {
       razonSocial: "",
-      nombre: "",
+      nombe: "",
       primerApellido: "",
       segundoApellido: "",
-      continuaParticipando: false,
     },
-  };
-}
-
-function crearEstructuraContratacionObra(objeto) {
-  return {
-    tipoArea: objeto.tipoArea?.[0]?.valor || "NO_ESPECIFICADO",
-    valorContratacionObra: objeto.tipoArea?.[0]?.clave || "",
-    nivelesResponsabilidad: {
-      autorizacionDictamen: [],
-      justificacionLicictacion: [],
-      convocatoriaInvitacion: [],
-      evaluacionProposiciones: [],
-      adjudicacionContrato: [],
-      formalizacionContrato: [],
-      otro: objeto.nivelResponsabilidad?.map((n) => n.clave) || [],
-    },
-    datosGeneralesProcedimientos: {
-      numeroExpedienteFolio: "",
-      tipoProcedimiento: "NO_ESPECIFICADO",
-      otroTipoProcedimiento: "",
-      materia: "NO_ESPECIFICADO",
-      otroMateria: "",
-      fechaInicioProcedimiento: formatearFecha(objeto.fechaCaptura),
-      fechaConclusionProcedimiento: "",
-    },
-    datosBeneficiariosFinales: {
-      razonSocial: "",
-      nombre: "",
-      primerApellido: "",
-      segundoApellido: "",
-      continuaParticipando: false,
-    },
+    continuaParticipando: true,
   };
 }
 
 function crearEstructuraOtorgamientoConcesiones(objeto) {
   return {
-    tipoActo: "NO_ESPECIFICADO",
+    tipoActo: "CONCECIONES",
     nivelesResponsabilidad: {
-      convocatoriaLicitacion: [],
-      dictamenesOpiniones: [],
-      visitasVerificacion: [],
-      evaluacionCumplimiento: [],
-      determinacionOtorgamiento: [],
-      otro: objeto.nivelResponsabilidad?.map((n) => n.clave) || [],
+      convocatoriaLicitacion: [""],
+      dictamenesOpiniones: [""],
+      visitasVerificacion: [""],
+      evaluacionCumplimiento: [""],
+      determinacionOtorgamiento: [""],
+      otro: objeto.nivelResponsabilidad?.map((n) => n.valor) || [""],
     },
     datosGeneralesProcedimientos: {
       numeroExpedienteFolio: "",
       denominacion: objeto.puesto?.nombre || "",
       objeto: "",
       fundamento: "",
-      nombrePersonaSolicitaOtorga: objeto.nombres || "",
-      primerApellidoSolicitaOtorga: objeto.primerApellido || "",
-      segundoApellidoSolicitaOtorga: objeto.segundoApellido || "",
-      denominacionPersonaMoral: objeto.institucionDependencia?.nombre || "",
+      nombrePersonaSolicitaOtorga: "",
+      primerApellidoSolicitaOtorga: "",
+      segundoApellidoSolicitaOtorga: "",
+      denominacionPersonaMoral: "",
       sectorActo: "",
       fechaInicioVigencia: formatearFecha(objeto.fechaCaptura),
       fechaConclusionVigencia: "",
       monto: "",
       urlInformacionActo: "",
-    },
-    datosBeneficiariosFinales: {
-      razonSocial: objeto.institucionDependencia?.nombre || "",
-      nombre: objeto.nombres || "",
-      primerApellido: objeto.primerApellido || "",
-      segundoApellido: objeto.segundoApellido || "",
-      continuaParticipando: false,
     },
   };
 }
@@ -803,27 +787,20 @@ function crearEstructuraOtorgamientoConcesiones(objeto) {
 function crearEstructuraEnajenacionBienes(objeto) {
   return {
     nivelesResponsabilidad: {
-      autorizacionesDictamenes: [],
-      analisisAutorizacion: [],
-      modificacionBases: [],
-      presentacionOfertas: [],
-      evaluacionOfertas: [],
-      adjudicacionBienes: [],
-      formalizacionContrato: [],
-      otro: objeto.nivelResponsabilidad?.map((n) => n.clave) || [],
+      autorizacionesDictamenes: [""],
+      analisisAutorizacion: [""],
+      modificacionBases: [""],
+      presentacionOfertas: [""],
+      evaluacionOfertas: [""],
+      adjudicacionBienes: [""],
+      formalizacionContrato: [""],
+      otro: objeto.nivelResponsabilidad?.map((n) => n.valor) || [""],
     },
     datosGeneralesProcedimientos: {
       numeroExpedienteFolio: "",
       descripcion: objeto.puesto?.nombre || "",
       fechaInicioProcedimiento: formatearFecha(objeto.fechaCaptura),
       fechaConclusionProcedimiento: "",
-    },
-    datosBeneficiariosFinales: {
-      razonSocial: "",
-      nombre: "",
-      primerApellido: "",
-      segundoApellido: "",
-      continuaParticipando: false,
     },
   };
 }
@@ -831,10 +808,10 @@ function crearEstructuraEnajenacionBienes(objeto) {
 function crearEstructuraDictaminacionAvaluos(objeto) {
   return {
     nivelesResponsabilidad: {
-      propuestasAsignaciones:
-        objeto.nivelResponsabilidad?.map((n) => n.clave) || [],
-      asignacionAvaluos: [],
-      emisionDictamenes: [],
+      propuestasAsignaciones: [""],
+      asignacionAvaluos: [""],
+      emisionDictamenes: [""],
+      otro: objeto.nivelResponsabilidad?.map((n) => n.valor) || [""],
     },
     datosGeneralesProcedimientos: {
       numeroExpedienteFolio: "",
@@ -842,13 +819,16 @@ function crearEstructuraDictaminacionAvaluos(objeto) {
       fechaInicioProcedimiento: formatearFecha(objeto.fechaCaptura),
       fechaConclusionProcedimiento: "",
     },
-    datosBeneficiariosFinales: {
-      razonSocial: "",
-      nombre: "",
-      primerApellido: "",
-      segundoApellido: "",
-      continuaParticipando: false,
-    },
+  };
+}
+
+function crearDatosBeneficiarios(objeto) {
+  return {
+    razonSocial: "",
+    nombe: "",
+    primerApellido: "",
+    segundoApellido: "",
+    continuaParticipando: true,
   };
 }
 
