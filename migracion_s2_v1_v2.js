@@ -247,13 +247,13 @@ function crearEstructuraEspecifica(tipoProcedimiento, objetoOriginal) {
           tipoArea: objetoOriginal?.tipoArea?.[0]?.valor || "",
           valorTipoArea: objetoOriginal?.tipoArea?.[0]?.clave || "",
           nivelesResponsabilidad: {
-            autorizacionDictamen: "",
+            autorizacionDictamen:
+              objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
             justificacionLicitacion: "",
             convocatoriaInvitacion: "",
             evaluacionProposiciones: "",
             adjudicacionContrato: "",
             formalizacionContrato: "",
-            otro: objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
           },
           datosGeneralesProcedimientos: [],
           datosBeneficiariosFinales: {
@@ -267,13 +267,13 @@ function crearEstructuraEspecifica(tipoProcedimiento, objetoOriginal) {
           tipoArea: objetoOriginal?.tipoArea?.[0]?.valor || "",
           valorContratacionObra: objetoOriginal?.tipoArea?.[0]?.clave || "",
           nivelesResponsabilidad: {
-            autorizacionDictamen: "",
+            autorizacionDictamen:
+              objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
             justificacionLicictacion: "",
             convocatoriaInvitacion: "",
             evaluacionProposiciones: "",
             adjudicacionContrato: "",
             formalizacionContrato: "",
-            otro: objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
           },
           datosGeneralesProcedimientos: {
             numeroExpedienteFolio: "",
@@ -298,12 +298,12 @@ function crearEstructuraEspecifica(tipoProcedimiento, objetoOriginal) {
         otorgamientoConcesiones: {
           tipoActo: "CONCESIÓN",
           nivelesResponsabilidad: {
-            convocatoriaLicitacion: "",
+            convocatoriaLicitacion:
+              objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
             dictamenesOpiniones: "",
             visitasVerificacion: "",
             evaluacionCumplimiento: "",
             determinacionOtorgamiento: "",
-            otro: objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
           },
           datosGeneralesProcedimientos: {
             numeroExpedienteFolio: "",
@@ -335,14 +335,14 @@ function crearEstructuraEspecifica(tipoProcedimiento, objetoOriginal) {
       return {
         enajenacionBienes: {
           nivelesResponsabilidad: {
-            autorizacionesDictamenes: "",
+            autorizacionesDictamenes:
+              objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
             analisisAutorizacion: "",
             modificacionBases: "",
             presentacionOfertas: "",
             evaluacionOfertas: "",
             adjudicacionBienes: "",
             formalizacionContrato: "",
-            otro: objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
           },
           datosGeneralesProcedimientos: {
             numeroExpedienteFolio: "",
@@ -357,10 +357,10 @@ function crearEstructuraEspecifica(tipoProcedimiento, objetoOriginal) {
       return {
         dictaminacionAvaluos: {
           nivelesResponsabilidad: {
-            propuestasAsignaciones: "",
+            propuestasAsignaciones:
+              objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
             asignacionAvaluos: "",
             emisionDictamenes: "",
-            otro: objetoOriginal?.nivelResponsabilidad?.[0]?.valor || "",
           },
           datosGeneralesProcedimientos: {
             numeroExpedienteFolio: "",
@@ -728,13 +728,15 @@ function crearEstructuraContratacionAdquisiciones(objeto) {
   return {
     tipoArea: objeto.tipoArea?.[0]?.valor || "AREA_CONTRATANTE",
     nivelesResponsabilidad: {
-      autorizacionDictamen: [""],
+      autorizacionDictamen: objeto.nivelResponsabilidad?.map(
+        (n) => n.valor
+      ) || [""],
       justificacionLicitacion: [""],
       convocatoriaInvitacion: [""],
       evaluacionProposiciones: [""],
       adjudicacionContrato: [""],
       formalizacionContrato: [""],
-      otro: objeto.nivelResponsabilidad?.map((n) => n.valor) || [""],
+      otro: [""],
     },
     datosGeneralesProcedimientos: [
       {
@@ -759,12 +761,14 @@ function crearEstructuraOtorgamientoConcesiones(objeto) {
   return {
     tipoActo: "CONCECIONES",
     nivelesResponsabilidad: {
-      convocatoriaLicitacion: [""],
+      convocatoriaLicitacion: objeto.nivelResponsabilidad?.map(
+        (n) => n.valor
+      ) || [""],
       dictamenesOpiniones: [""],
       visitasVerificacion: [""],
       evaluacionCumplimiento: [""],
       determinacionOtorgamiento: [""],
-      otro: objeto.nivelResponsabilidad?.map((n) => n.valor) || [""],
+      otro: [""],
     },
     datosGeneralesProcedimientos: {
       numeroExpedienteFolio: "",
@@ -787,14 +791,16 @@ function crearEstructuraOtorgamientoConcesiones(objeto) {
 function crearEstructuraEnajenacionBienes(objeto) {
   return {
     nivelesResponsabilidad: {
-      autorizacionesDictamenes: [""],
+      autorizacionesDictamenes: objeto.nivelResponsabilidad?.map(
+        (n) => n.valor
+      ) || [""],
       analisisAutorizacion: [""],
       modificacionBases: [""],
       presentacionOfertas: [""],
       evaluacionOfertas: [""],
       adjudicacionBienes: [""],
       formalizacionContrato: [""],
-      otro: objeto.nivelResponsabilidad?.map((n) => n.valor) || [""],
+      otro: [""],
     },
     datosGeneralesProcedimientos: {
       numeroExpedienteFolio: "",
@@ -808,10 +814,12 @@ function crearEstructuraEnajenacionBienes(objeto) {
 function crearEstructuraDictaminacionAvaluos(objeto) {
   return {
     nivelesResponsabilidad: {
-      propuestasAsignaciones: [""],
+      propuestasAsignaciones: objeto.nivelResponsabilidad?.map(
+        (n) => n.valor
+      ) || [""],
       asignacionAvaluos: [""],
       emisionDictamenes: [""],
-      otro: objeto.nivelResponsabilidad?.map((n) => n.valor) || [""],
+      otro: [""],
     },
     datosGeneralesProcedimientos: {
       numeroExpedienteFolio: "",
